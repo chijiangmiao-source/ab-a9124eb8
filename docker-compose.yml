@@ -1,0 +1,44 @@
+# 星场身份识别审计台：Web + API + 验收服务
+# 宿主机端口与健康检查参数均可通过环境变量（或 .env 文件）配置，见 .env.example
+services:
+  api:
+    build: ./api
+    image: starfield-audit-api
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000$${HEALTHCHECK_PATH:-/api/health}', timeout=3)\" || exit 1"]
+      interval: ${HEALTHCHECK_INTERVAL:-10s}
+      timeout: ${HEALTHCHECK_TIMEOUT:-5s}
+      retries: ${HEALTHCHECK_RETRIES:-5}
+      start_period: ${HEALTHCHECK_START_PERIOD:-5s}
+    environment:
+      HEALTHCHECK_PATH: ${HEALTHCHECK_PATH:-/api/health}
+
+  web:
+    build: ./web
+    image: starfield-audit-web
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/ || exit 1"]
+      interval: ${HEALTHCHECK_INTERVAL:-10s}
+      timeout: ${HEALTHCHECK_TIMEOUT:-5s}
+      retries: ${HEALTHCHECK_RETRIES:-5}
+      start_period: ${HEALTHCHECK_START_PERIOD:-5s}
+
+  verify:
+    build: ./verify
+    image: starfield-audit-verify
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    environment:
+      API_URL: http://api:8000
+      WEB_URL: http://web:80
+      WEB_CHECK: "1"
